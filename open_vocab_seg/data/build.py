@@ -41,7 +41,7 @@ __all__ = [
     "build_detection_test_loader",
 ]
 import os
-os.environ['DETECTRON2_DATASETS'] = '/scratch/ntl2689/my_env/datasets/'
+os.environ['DETECTRON2_DATASETS'] = os.environ.get('SLURM_TMPDIR')
 
 def print_classification_instances_class_histogram(dataset_dicts, class_names):
     """
