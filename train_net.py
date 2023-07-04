@@ -1,5 +1,3 @@
-
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Copyright (c) Meta Platforms, Inc. All Rights Reserved
 # Modified by Feng Liang from https://github.com/MendelXu/zsseg.baseline/blob/master/train_net.py
@@ -236,7 +234,8 @@ class Trainer(DefaultTrainer):
             raise NotImplementedError(f"no optimizer type {optimizer_type}")
         if not cfg.SOLVER.CLIP_GRADIENTS.CLIP_TYPE == "full_model":
             optimizer = maybe_add_gradient_clipping(cfg, optimizer)
-        return optimizer
+        return optimizer 
+
 
     @classmethod
     def test_with_TTA(cls, cfg, model):
@@ -294,6 +293,7 @@ def main(args):
         return res
 
     trainer = Trainer(cfg)
+    print('RESUME: ', args.resume)
     trainer.resume_or_load(resume=args.resume)
     return trainer.train()
 

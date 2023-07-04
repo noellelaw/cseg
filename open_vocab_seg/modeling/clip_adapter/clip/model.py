@@ -560,7 +560,6 @@ def build_model(state_dict: dict, mask_prompt_depth: int = 0):
     mpt_vit = 'clip_adapter.clip_model.visual.proj' in state_dict
     model = None
     if vit:
-        print('HERE')
         vision_width = state_dict["visual.conv1.weight"].shape[0]
         vision_layers = len(
             [
@@ -574,8 +573,8 @@ def build_model(state_dict: dict, mask_prompt_depth: int = 0):
             (state_dict["visual.positional_embedding"].shape[0] - 1) ** 0.5
         )
         image_resolution = vision_patch_size * grid_size
+    # I dont think this does anything but just in case
     elif mpt_vit:
-        print('MPT HERE')
         vision_width = state_dict["clip_adapter.clip_model.visual.conv1.weight"].shape[0]
         vision_layers = len(
             [

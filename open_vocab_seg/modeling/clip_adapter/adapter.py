@@ -12,52 +12,79 @@ from detectron2.structures import BitMasks
 from .utils import build_clip_model, crop_with_mask
 from .text_template import PromptExtractor
 
-
 PIXEL_MEAN = (0.48145466, 0.4578275, 0.40821073)
 PIXEL_STD = (0.26862954, 0.26130258, 0.27577711)
 
-class Affine(nn.Module):
+class OneDAff(nn.Module):
+
     def __init__(self, dim):
         super().__init__()
-        self.g = nn.Parameter(torch.ones(1, dim))
-        self.b = nn.Parameter(torch.zeros(1, dim))
+
+        self.alpha = nn.Parameter(torch.ones([1, dim]))
+        self.beta = nn.Parameter(torch.zeros([1, dim]))
 
     def forward(self, x):
-        return x * self.g + self.b
+        x = x * self.alpha + self.beta
+        return x
 
-class PreAffinePostLayerScale(nn.Module): # https://arxiv.org/abs/2103.17239
-    def __init__(self, dim, depth, fn):
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout = 0.):
         super().__init__()
-        if depth <= 18:
-            init_eps = 0.1
-        elif depth > 18 and depth <= 24:
-            init_eps = 1e-5
-        else:
-            init_eps = 1e-6
+        self.net = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
+    def forward(self, x):
+        return self.net(x)
 
-        scale = torch.zeros(1, dim).fill_(init_eps)
-        self.scale = nn.Parameter(scale)
-        self.affine = Affine(dim)
-        self.fn = fn
+class MLPblock(nn.Module):
+
+    def __init__(self, dim, mlp_dim, dropout = 0.1, init_values=1e-4):
+        super().__init__()
+
+        self.pre_affine = OneDAff(dim)
+        self.ff = nn.Sequential(
+            FeedForward(dim, mlp_dim, dropout),
+        )
+        self.gamma = nn.Parameter(init_values * torch.ones((dim)), requires_grad=True)
 
     def forward(self, x):
-        return self.fn(self.affine(x)) * self.scale + x
+        x = x + self.gamma * self.ff(x)
+        return x
 
-def ResMLP(*, mlp_num_hiddens, mlp_num_outputs, depth, expansion_factor = 4):
-  dim = 1024 #mlp_num_hiddens
-  wrapper = lambda i, fn: PreAffinePostLayerScale(dim, i + 1, fn)
-  return nn.Sequential(
-      nn.Linear(mlp_num_hiddens, dim),
-      *[nn.Sequential(
-          wrapper(i, nn.Sequential(
-              nn.Linear(dim, dim * expansion_factor),
-              nn.GELU(),
-              nn.Linear(dim * expansion_factor, dim)
-          ))
-      ) for i in range(depth)],
-      Affine(dim),
-      nn.Linear(dim, mlp_num_outputs)
-  )
+
+class ResMLP(nn.Module):
+
+    def __init__(self, hidden_dim, output_dim, depth, contraction_factor = 4):
+        super().__init__()
+
+        # pass in a 1 x 768*2 vector 
+        self.mlp_blocks = nn.ModuleList([])
+
+        for _ in range(depth):
+            self.mlp_blocks.append(MLPblock(hidden_dim, hidden_dim // contraction_factor))
+
+        self.affine = OneDAff(hidden_dim)
+
+        self.mlp_head = nn.Sequential(
+            nn.Linear(hidden_dim, output_dim)
+        )
+
+    def forward(self, x):
+
+        for mlp_block in self.mlp_blocks:
+            x = mlp_block(x)
+
+        x = self.affine(x)
+
+        x = x.mean(dim=1)
+        #print('MLP head shape: ', self.mlp_head(x).shape)
+
+        return self.mlp_head(x)
+
 
 class ClipAdapter(nn.Module):
   def __init__(
@@ -79,9 +106,15 @@ class ClipAdapter(nn.Module):
     self.text_feature_buffer = {}
     # -------------------------------------------------------------------------------
     #self.image_ensembler = VisionEnsembleMLP(768*2, 768, 0.1) # in dim, out dim, dropout 
+    '''
     self.image_ensembler = ResMLP(mlp_num_hiddens=(768*2), 
                                   mlp_num_outputs=768, 
                                   depth = 3)
+    '''
+    # need to pass in (1 x 2 x 1 x 786)
+    self.image_ensembler = ResMLP(hidden_dim = (768*2),
+                                  output_dim = 768, 
+                                  depth = 4)
 
   def forward(
         self, 
@@ -132,13 +165,6 @@ class ClipAdapter(nn.Module):
 
   # -----------------------------------------------------------------------------
   def get_image_features(self, image: torch.Tensor):
-    '''
-    import torchvision.transforms as T
-    tfrm = T.ToPILImage()
-    pil_image = tfrm(image)
-    image = self.clip_preprocess(pil_image)
-    image = image[:, :, :, None].permute(3,0,1,2).float().to('cuda')
-    '''
     image_features = self.clip_model_reg.visual(image)
     image_features = image_features / image_features.norm(dim=-1, keepdim=True)
     return image_features
@@ -239,19 +265,22 @@ class ClipEnsembler(ClipAdapter):
         image_features = self.get_image_features(image)
 
         #print(f'Ensembling features ...')
-        ensembled_image_features = []
-        k = masked_features.shape[0]
+        #print('MASKED FEATURES: ', masked_features.shape)
+        k, d = masked_features.shape
+        ensembled_image_features = torch.cuda.FloatTensor(k, 1, d*2)
         for i in range(k):
-          mf = masked_features[i,:,None].permute(1,0)
-          concat_image_features = torch.cat((image_features, mf),1)
+          mf = masked_features[i,:,None].permute(1,0) 
+          concat_image_features = torch.cat((image_features, mf), 1)
+          #print('CONCAT IMAGE FEATURES: ', concat_image_features.shape)
           # print(concat_image_features.shape)
           # Get ensembled features
-          ensembled_image_features.append(self.image_ensembler.forward(concat_image_features))
-        ensembled_image_features = torch.cat(tuple(ensembled_image_features ))
-        #print('ENSEMBLED_FEATURES: ', ensembled_image_features.shape) #k x 768 
+          ensembled_image_features[i,:] = concat_image_features
+        #print('ENSEMBLED_FEATURES: ',ensembled_image_features.shape)
+        ensembled_features = self.image_ensembler.forward(ensembled_image_features)
+        #print('ENSEMBLED_FEATURES: ', ensembled_features.shape) #k x 768 
 
         text_feature = self.get_text_features(text)  # k,feat_dim
-        return self.get_sim_logits(text_feature, ensembled_image_features), unnorm_regions, valid_flag
+        return self.get_sim_logits(text_feature, ensembled_features), unnorm_regions, valid_flag
         #return self.get_sim_logits(text_feature, masked_features), unnorm_regions, valid_flag
 
 
@@ -272,9 +301,11 @@ class ClipEnsembler(ClipAdapter):
         """
         dtype = mask.dtype
         bin_mask = mask > self.mask_thr
-        valid = bin_mask.sum(dim=(-1, -2)) > 0
+        valid = bin_mask.sum(dim=(-1, -2)) > 0 #( 4, 1, h, w) --> h = 0, w = 2
+
         bin_mask = bin_mask[valid]
         mask = mask[valid]
+
         if not self.mask_matting:
             mask = bin_mask
         bin_mask = BitMasks(bin_mask)
@@ -282,16 +313,21 @@ class ClipEnsembler(ClipAdapter):
         # crop,mask
         regions = []
         region_masks = []
+        valid_tracker = 0
         for bbox, single_mask in zip(bboxes, mask):
-            region, region_mask = crop_with_mask(
+            region, region_mask, not_a_bitch = crop_with_mask(
                 image.type(dtype),
                 single_mask.type(dtype),
                 bbox,
                 fill=self.mask_fill,
                 expand_ratio=self.mask_expand_ratio,
             )
-            regions.append(region.unsqueeze(0))
-            region_masks.append(region_mask.unsqueeze(0))
+            if not_a_bitch:
+              regions.append(region.unsqueeze(0))
+              region_masks.append(region_mask.unsqueeze(0))
+            else: 
+              valid[valid_tracker] = False
+            valid_tracker += 1
         if len(regions) == 0:
             return None, valid
         unnorm_regions = regions
@@ -299,17 +335,30 @@ class ClipEnsembler(ClipAdapter):
             regions = [(r - self.pixel_mean) / self.pixel_std for r in regions]
         # resize
         if self.region_resized:
-            regions = [
-                F.interpolate(r, size=(224, 224), mode="bicubic") for r in regions
-            ]
+            for i, r in enumerate(regions):
+              try:
+                regions[i] = F.interpolate(r, size=(224, 224), mode="bicubic") 
+              except:
+                print(f'fail with {r.shape}.')
+                regions[i] = torch.zeros((1, 3, 224,224)).to('cuda')
             regions = torch.cat(regions)
-            region_masks = [
-                F.interpolate(r, size=(224, 224), mode="nearest") for r in region_masks
-            ]
+            for i, r in enumerate(region_masks):
+              try: 
+                region_masks[i] = F.interpolate(r, size=(224, 224), mode="nearest") 
+              except:
+                print(r.shape)
+                print(f'fail with {r.shape}.')
+                region_masks[i] = torch.zeros((1, 1, 224,224)).to('cuda')
             region_masks = torch.cat(region_masks)
-            unnorm_regions = [
-                F.interpolate(r, size=(224, 224), mode="bicubic") for r in unnorm_regions
-            ]
+
+            for i, r in enumerate(unnorm_regions):
+              try:
+                unnorm_regions[i] = F.interpolate(r, size=(224, 224), mode="bicubic")
+              except:
+                print(r.shape)
+                print(f'fail with {r.shape}.')
+                unnorm_regions[i] = torch.zeros((1, 3, 224,224)).to('cuda')
+
             unnorm_regions = torch.cat(unnorm_regions)
         return (regions, unnorm_regions), region_masks, valid
 
