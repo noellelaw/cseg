@@ -114,7 +114,7 @@ class ClipAdapter(nn.Module):
     # need to pass in (1 x 2 x 1 x 786)
     self.image_ensembler = ResMLP(hidden_dim = (768*2),
                                   output_dim = 768, 
-                                  depth = 4)
+                                  depth = 6)
 
   def forward(
         self, 

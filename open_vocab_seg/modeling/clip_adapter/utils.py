@@ -59,11 +59,17 @@ def crop_with_mask(
     t = max(t, 0)
     r = min(r, w)
     b = min(b, h)
-    new_image = torch.cat(
-        [image.new_full((1, b - t, r - l), fill_value=val) for val in fill]
-    )
+    valid = True
+    if l > r or t > b:
+      valid = False
+      return None, None, valid
+    else:
+      new_image = torch.cat(
+          [image.new_full((1, b - t, r - l), fill_value=val) for val in fill]
+      )
+    
+    return image[:, t:b, l:r] * mask[None, t:b, l:r] + (1 - mask[None, t:b, l:r]) * new_image, mask[None, t:b, l:r], valid
     # return image[:, t:b, l:r], mask[None, t:b, l:r]
-    return image[:, t:b, l:r] * mask[None, t:b, l:r] + (1 - mask[None, t:b, l:r]) * new_image, mask[None, t:b, l:r]
 
 
 def build_clip_model(model: str, mask_prompt_depth: int = 0, frozen: bool = True):
