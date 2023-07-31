@@ -8,6 +8,10 @@ from .text_template import (
 )
 from .adapter import ClipAdapter, ClipEnsembler
 
+from .mask_decoder import MLP, MaskDecoder
+
+from .transformer_adapter import TwoWayAttentionBlock, TwoWayTransformer, Attention
+
 
 def build_text_prompt(cfg):
     if cfg.TEXT_TEMPLATES == "predefined":

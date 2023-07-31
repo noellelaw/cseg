@@ -12,7 +12,7 @@ MODEL:
     DROP_PATH_RATE: 0.3
     PATCH_NORM: True
     PRETRAIN_IMG_SIZE: 384
-  WEIGHTS: "/scratch/ntl2689/pytorch-example/ov-seg/ovseg_swinbase_vitL14_ft_mpt.pth"
+  WEIGHTS: "/scratch/ntl2689/pytorch-example/ov-seg-old/ovseg_swinbase_vitL14_ft_mpt.pth"
   PIXEL_MEAN: [123.675, 116.280, 103.530]
   PIXEL_STD: [58.395, 57.120, 57.375]
   SEM_SEG_HEAD:
@@ -57,10 +57,10 @@ DATASETS:
   TRAIN: ("coco_2017_train_stuff_sem_seg",)
   TEST: ("ade20k_sem_seg_val",)
 SOLVER:
-  IMS_PER_BATCH: 1
+  IMS_PER_BATCH: 32
   BASE_LR: 0.00006
   MAX_ITER: 120000
-  CHECKPOINT_PERIOD: 1000
+  CHECKPOINT_PERIOD: 500
   WARMUP_FACTOR: 1e-6
   WARMUP_ITERS: 1500
   LR_SCHEDULER_NAME: "WarmupPolyLR"

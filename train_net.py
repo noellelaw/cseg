@@ -1,3 +1,5 @@
+
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Copyright (c) Meta Platforms, Inc. All Rights Reserved
 # Modified by Feng Liang from https://github.com/MendelXu/zsseg.baseline/blob/master/train_net.py
@@ -51,8 +53,6 @@ from open_vocab_seg.evaluation import (
 )
 from open_vocab_seg.utils.events import WandbWriter, setup_wandb
 from open_vocab_seg.utils.post_process_utils import dense_crf_post_process
-
-
 class Trainer(DefaultTrainer):
     """
     Extension of the Trainer class adapted to DETR.
@@ -173,7 +173,9 @@ class Trainer(DefaultTrainer):
         params: List[Dict[str, Any]] = []
         #ADDED TO ONLY GRADIENT OVER ENSEMBLER
         for param_name, value in model.named_parameters():
-            if not param_name.startswith('clip_adapter.image_ensembler'):
+            if not param_name.startswith("clip_adapter.clip_model.visual.proj") \
+              and not param_name.startswith("clip_adapter.clip_model.visual.ln_post") \
+              and not  param_name.startswith("clip_adapter.mask_decoder"):
                 value.requires_grad = False
         memo: Set[torch.nn.parameter.Parameter] = set()
         for module_name, module in model.named_modules():
@@ -300,6 +302,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = default_argument_parser().parse_args()
+    
     print("Command Line Args:", args)
     launch(
         main,

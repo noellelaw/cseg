@@ -324,20 +324,23 @@ class VisionTransformer(nn.Module):
         self.mask_embedding = nn.Parameter(torch.zeros(self.mask_prompt_depth, self.grid_size * self.grid_size, width))
 
     def forward(self, x: torch.Tensor, m: torch.Tensor = None):
+
         x = self.conv1(x)  # shape = [*, width, grid, grid]
+        
         if self.mask_prompt_depth == 0: 
           x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
           x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
 
           #x = x.permute(1, 2, 0)  #  LND
           x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
-          #print(x.shape, self.positional_embedding.shape)
+          
           x = x + self.positional_embedding.to(x.dtype)
           x = self.ln_pre(x)
 
           x = x.permute(1, 0, 2)  # NLD -> LND
           x = self.transformer(x)
           x = x.permute(1, 0, 2)  # LND -> NLD
+          grid = int(np.sqrt(x.shape[2]))
 
           x = self.ln_post(x[:, 0, :])
 
@@ -354,6 +357,7 @@ class VisionTransformer(nn.Module):
               else:
                   mask_embedding = self.mask_embedding.to(x.dtype)
               x = x * m + mask_embedding[0].unsqueeze(0) * (1 - m)
+          
 
           x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
           x = x + self.positional_embedding.to(x.dtype)
@@ -379,8 +383,76 @@ class VisionTransformer(nn.Module):
 
         return x
 
+    def get_vit_embedding(self, x: torch.Tensor, m: torch.Tensor = None):
 
+        x = self.conv1(x)  # shape = [*, width, grid, grid]
 
+        vit_out = None
+        pos_out = None
+        if self.mask_prompt_depth == 0: 
+          x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+          x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+
+          #x = x.permute(1, 2, 0)  #  LND
+          x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
+          
+          x = x + self.positional_embedding.to(x.dtype)
+          x = self.ln_pre(x)
+
+          x = x.permute(1, 0, 2)  # NLD -> LND
+          x = self.transformer(x)
+          x = x.permute(1, 0, 2)  # LND -> NLD
+          grid = int(np.sqrt(x.shape[2]))
+          vit_out = x.reshape(x.shape[0], x.shape[1], grid, grid)[:,1:]  # shape = [*, width, grid ** 2]
+          pos_out = self.positional_embedding.reshape(x.shape[1], grid, grid)[1:].unsqueeze(0)#
+          #print('IMAGE ViT SIZES: ', vit_out.shape, pos_out.shape)
+
+        else:
+          x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+          x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+          if m is not None:
+              m = self.mask_pool(m.to(torch.float).squeeze()).reshape(m.shape[0], -1).unsqueeze(-1)
+              m = torch.ceil(m)
+              if self.mask_embedding.shape[1] == 1:
+                  mask_embedding = self.mask_embedding.to(x.dtype).repeat(1, x.shape[1], 1)
+              else:
+                  mask_embedding = self.mask_embedding.to(x.dtype)
+              x = x * m + mask_embedding[0].unsqueeze(0) * (1 - m)
+          
+
+          x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
+          x = x + self.positional_embedding.to(x.dtype)
+          x = self.ln_pre(x)
+
+          x = x.permute(1, 0, 2)  # NLD -> LND
+          if m is not None:
+              for i, blk in enumerate(self.transformer.resblocks):
+                  d = i + 1
+                  x = blk(x)
+                  if d < self.mask_prompt_depth:
+                      masked_x = x[1:, :, :] * m.permute(1, 0, 2) + \
+                                mask_embedding[d].unsqueeze(0).permute(1, 0, 2) * (1 - m.permute(1, 0, 2))
+                      x = torch.cat([x[:1, :, :], masked_x], dim=0)
+          else:
+              x = self.transformer(x)
+          x = x.permute(1, 0, 2)  # LND -> NLD
+
+          grid = int(np.sqrt(x.shape[2]))
+          vit_out = x.reshape(x.shape[0], x.shape[1], grid, grid) # shape = [*, width, grid ** 2]
+                
+          #print('MASK ViT SIZES: ', vit_out.shape)
+
+        return x, vit_out, pos_out
+
+    # ADDED
+    def get_clip_embedding(self, x: torch.Tensor):
+
+        x = self.ln_post(x[:, 0, :])
+
+        if self.proj is not None:
+            x = x @ self.proj
+
+        return x
 
 class CLIP(nn.Module):
     def __init__(
