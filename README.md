@@ -14,7 +14,10 @@ Evaluation on the KITTI Dataset with OVSeg Pretrained Weights: (Swin-Base + CLIP
 Training on COCO or ADE20k dataset:
 - The cseg_training.ipynb has the basic training commands and setup, it assumes you have gone through data preparation required for the detectron2 datasets.
 - Due to the size of the datasets, the connection between google colab and google drive can time out.
-- The /sbatch/ folder features the files required to run this in a slurm environment. It assumes that the virtual environment has all required packages installed. 
+- The /sbatch/ folder features the files required to run this in a slurm environment. It assumes that the virtual environment has all required packages installed.
+
+Fine-tuning the classification stage (CLIP) is adapted from OVSeg: 
+- [OpenCLIP](https://github.com/facebookresearch/ov-seg/blob/main/open_clip_training/README.md)
   
 ## Required weights
 - [R103.pkl](https://drive.google.com/file/d/1L36u2_rkEOPHlXLOvy0J_3ztTSoyV6jV/view?usp=share_link)
