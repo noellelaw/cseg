@@ -15,8 +15,8 @@ Training on COCO or ADE20k dataset:
 - The cseg_training.ipynb has the basic training commands and setup, it assumes you have gone through data preparation required for the detectron2 datasets.
 - Due to the size of the datasets, the connection between google colab and google drive can time out.
 - The /sbatch/ folder features the files required to run this in a slurm environment. It assumes that the virtual environment has all required packages installed.
-- The code for full training is in **open_vocab_seg** subfolder
-- More information on training can be found [here](https://github.com/facebookresearch/ov-seg/blob/main/GETTING_STARTED.md)
+- The code for full training is in **open_vocab_seg** subfolder.
+- More information on training can be found [here](https://github.com/facebookresearch/ov-seg/blob/main/GETTING_STARTED.md).
 
 Fine-tuning the classification stage (CLIP) is adapted from OVSeg: 
 - [OpenCLIP Training](https://github.com/facebookresearch/ov-seg/blob/main/open_clip_training/README.md)
