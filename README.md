@@ -10,6 +10,11 @@ Evaluation on the KITTI Dataset with OVSeg Pretrained Weights: (Swin-Base + CLIP
 - Download cseg_verification.ipynb, or view [colab file](https://colab.research.google.com/drive/1NVYVUN0K6BFzwwiOWNaggb7Z8gcQUxJF?usp=sharing) directly
 - Upload ovseg_swinbase_vitL14_ft_mpt.pth to accessable folder, preferably a google drive folder so that you don't have to re-upload every time. Edit the **model_weights** field under **Build Model** in the ipynb file to the path where ovseg_swinbase_vitL14_ft_mpt.pth is stored.
 - Place the [KITTI Test images](https://drive.google.com/drive/folders/1LLKGeYnLXBY1lJXRKOUpTk4GKZaEoNYR?usp=drive_link) to an easily accessible place in drive. Edit the **data_fldr** field under **Read in KITTI test data from drive** in the ipynb file to this path.
+
+Training on COCO or ADE20k dataset:
+- The cseg_training.ipynb has the basic training commands and setup, it assumes you have gone through data preparation required for the detectron2 datasets.
+- Due to the size of the datasets, the connection between google colab and google drive can time out.
+- The /sbatch/ folder features the files required to run this in a slurm environment. It assumes that the virtual environment has all required packages installed. 
   
 ## Required weights
 - [R103.pkl](https://drive.google.com/file/d/1L36u2_rkEOPHlXLOvy0J_3ztTSoyV6jV/view?usp=share_link)
