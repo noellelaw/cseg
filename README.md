@@ -1,5 +1,5 @@
 # cseg
-Context-aware open-vocabulary semantic segmentation (adapted from ov-seg)
+Context-aware open-vocabulary semantic segmentation (adapted from [ov-seg](https://github.com/facebookresearch/ov-seg/tree/main))
 
 ## Data Preparation
 Please see [datasets preparation](https://github.com/facebookresearch/ov-seg/blob/main/datasets/DATASETS.md).
