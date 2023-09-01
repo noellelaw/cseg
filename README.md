@@ -25,3 +25,7 @@ Fine-tuning the classification stage (CLIP) is adapted from OVSeg:
 ## Required weights
 - [R103.pkl](https://drive.google.com/file/d/1L36u2_rkEOPHlXLOvy0J_3ztTSoyV6jV/view?usp=share_link)
 - [ovseg_swinbase_vitL14_ft_mpt.pth](https://drive.google.com/file/d/1E_ljD_Q7h-LFVcP27UZDuwWCuSh3WAbB/view?usp=share_link)
+
+## Mini Experiment for Fine-tuning the classification stage (CLIP) 
+- Goal: quickly test whether an architecture is learning to use global context only when necessary woth 2-class test case, thus allowing quicker iteration and model improvement
+- Access [notebook](https://colab.research.google.com/drive/1jNGIurwzM4ferc-_oYRLp1SmXBSBMnJa?usp=sharing) for instructions and set-up, this work will live primarily on the `colab` branch
