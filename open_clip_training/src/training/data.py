@@ -33,40 +33,40 @@ from .imagenet_zeroshot_data import openai_imagenet_template as templates
 class CsvDataset(Dataset):
     def __init__(self, input_filename, transforms, img_key, caption_key, sep="\t"):
         logging.debug(f'Loading csv data from {input_filename}.')
-        df = pd.read_csv(input_filename, sep=sep)
-
-        self.masks = df[img_key].tolist()
-        self.captions = df[caption_key].tolist()
-        i = 0
-        self.images = []
-        while i < len(self.masks): 
-            m = self.masks[i]
-            image_file = 'coco/train2017/'+m[19:-6]+'.jpg'
-            image_filepath = os.path.join(os.getenv('SLURM_TMPDIR'),'openclip_data',str(image_file))
-            if os.path.isfile(image_filepath):
-                self.images.append(image_file)
-                i += 1
-            else:
-                del self.masks[i]
-                del self.captions[i]
+        df = pd.read_csv(input_filename, header='infer', delimiter=',')
+        #breakpoint()
+        #CHANGE THIS TO YOUR DATA FOLDER
+        fldr = '/content/drive/MyDrive/cseg-tfrm/open_clip_training/openclip_data/'
+        masks = df[img_key].tolist()
+        captions = df[caption_key].tolist()
+        self.masks, self.captions, self.images = [], [], []
+        for i in range(len(masks)):
+          file = masks[i] 
+          path = fldr+file
+          #print(path)
+          if os.path.isfile(path):
+            self.masks.append(path)
+            self.captions.append(captions[i])
+            image_file = fldr+'mini_experiment/'+file[-10:]
+            self.images.append(image_file)
+            i += 1
+        #breakpoint()
         self.transforms = transforms
+        print(f'NUM IMAGE SAMPLES: {len(self.images)}')
         logging.debug('Done loading data.')
+
 
     def __len__(self):
         return len(self.captions)
 
     def __getitem__(self, idx):
-        mask_filepath = os.path.join(os.getenv('SLURM_TMPDIR'),'openclip_data',str(self.masks[idx]))
-        image_filepath = os.path.join(os.getenv('SLURM_TMPDIR'),'openclip_data',str(self.images[idx]))
+        mask_filepath = str(self.masks[idx])
+        image_filepath = str(self.images[idx])
         masks = self.transforms(Image.open(str(mask_filepath)))
         images = self.transforms(Image.open(str(image_filepath)))
 
-        # template = random.choice(templates)
-        # texts = template(str(self.captions[idx]))  # format with class
-        # texts = tokenize(texts)[0]  # tokenize
         texts = tokenize([str(self.captions[idx])])[0]
         return masks, texts, images
-
 
 class SharedEpoch:
     def __init__(self, epoch: int = 0):
